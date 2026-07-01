@@ -14,6 +14,7 @@
     import StatsPanel from './components/StatsPanel.svelte';
     import ChatTab from './components/ChatTab.svelte';
     import GoalsTab from './components/GoalsTab.svelte';
+    import TradingTab from './components/TradingTab.svelte';
     import SkillsTab from './components/SkillsTab.svelte';
     import KnowledgeTab from './components/KnowledgeTab.svelte';
     import ToolsTab from './components/ToolsTab.svelte';
@@ -28,6 +29,7 @@
         { id: 'overview', label: 'Overview', icon: 'fa-chart-line' },
         { id: 'chat', label: 'Chat', icon: 'fa-comments' },
         { id: 'goals', label: 'Goals', icon: 'fa-bullseye' },
+        { id: 'trading', label: 'Trading', icon: 'fa-chart-candlestick' },
         { id: 'skills', label: 'Skills', icon: 'fa-puzzle-piece' },
         { id: 'knowledge', label: 'Knowledge', icon: 'fa-diagram-project' },
         { id: 'tools', label: 'Tools', icon: 'fa-screwdriver-wrench' },
@@ -264,6 +266,8 @@
             <ChatTab />
         {:else if dashboard.currentTab === 'goals'}
             <GoalsTab />
+        {:else if dashboard.currentTab === 'trading'}
+            <TradingTab />
         {:else if dashboard.currentTab === 'skills'}
             <SkillsTab />
         {:else if dashboard.currentTab === 'knowledge'}

@@ -64,18 +64,29 @@ pub fn default_personas() -> Vec<(&'static str, &'static str, &'static str)> {
              constraints and timelines. Produce plans that are specific, \
              measurable, and achievable.",
         ),
+        (
+            "trader",
+            "Portfolio Trading Analyst",
+            "You are a paper-trading portfolio analyst. Each session, using \
+             the `trading` tool: review the current watchlist (watchlist_list), \
+             pull a quote and position for each symbol (quote, positions), \
+             decide buy/sell/hold for each one, and log every decision via \
+             paper_order (passing the price from your quote call) with a \
+             clear rationale — even for holds. You may add \
+             or remove symbols from the watchlist (watchlist_add / \
+             watchlist_remove) if your analysis calls for it. Never claim to \
+             place a real order — paper_order only records a simulated \
+             decision. The user's portfolio-management strategy for this \
+             session follows; apply it when deciding what to buy, sell, or \
+             hold.",
+        ),
     ]
 }
 
-/// Seed default personas if the table is empty.
+/// Seed default personas, inserting any that are missing. Idempotent, so
+/// personas added in later releases get picked up on existing databases too.
 pub async fn seed_defaults(db: &Arc<Mutex<Connection>>) -> Result<()> {
     let db = db.lock().await;
-    let count: i64 = db
-        .query_row("SELECT COUNT(*) FROM personas", [], |row| row.get(0))?;
-
-    if count > 0 {
-        return Ok(());
-    }
 
     for (id, name, personality) in default_personas() {
         db.execute(

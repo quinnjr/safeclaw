@@ -27,8 +27,8 @@ describe('PendingActions', () => {
         expect(screen.getByText('Reject All')).toBeTruthy();
     });
 
-    it('shows empty state when no actions', () => {
+    it('shows empty state when no actions', async () => {
         render(PendingActions);
-        expect(screen.getByText('No pending actions')).toBeTruthy();
+        expect(await screen.findByText(/No pending actions/)).toBeTruthy();
     });
 });

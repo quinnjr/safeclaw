@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte';
+    import { t } from '../lib/i18n';
     import { api } from '../lib/api';
     import { liveFeed, clearLiveFeed, pushToolEvent } from '../lib/state.svelte';
     import { formatTime as fmtTime } from '../lib/time';

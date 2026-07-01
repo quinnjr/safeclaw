@@ -172,12 +172,14 @@
                 onclick={send}
                 disabled={sending || !input.trim()}
                 class="btn btn--primary btn--md shrink-0"
+                aria-label="Send"
             >
                 {#if sending}
-                    <i class="fa-solid fa-circle-notch fa-spin"></i>
+                    <i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>
                 {:else}
-                    <i class="fa-solid fa-paper-plane"></i>
+                    <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
                 {/if}
+                <span class="sr-only">Send</span>
             </button>
         </div>
     </div>

@@ -2,7 +2,7 @@ import type { ToolEvent } from './types';
 
 const MAX_FEED_EVENTS = 100;
 
-export type TabId = 'overview' | 'chat' | 'goals' | 'skills' | 'knowledge' | 'tools' | 'trash' | 'security' | 'operations' | 'settings';
+export type TabId = 'overview' | 'chat' | 'goals' | 'trading' | 'skills' | 'knowledge' | 'tools' | 'trash' | 'security' | 'operations' | 'settings';
 
 export const dashboard = $state({
     refreshCounter: 0,

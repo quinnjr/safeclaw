@@ -496,6 +496,36 @@ pub(crate) fn migrate(conn: &Connection) -> Result<()> {
         ",
     )?;
 
+    // Robinhood paper-trading module.
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS watchlist (
+            symbol      TEXT PRIMARY KEY,
+            added_at    TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS paper_trades (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol      TEXT NOT NULL,
+            side        TEXT NOT NULL,
+            qty         REAL NOT NULL,
+            price       REAL NOT NULL,
+            rationale   TEXT NOT NULL,
+            decided_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS trading_config (
+            id                INTEGER PRIMARY KEY CHECK (id = 1),
+            interval_minutes  INTEGER NOT NULL DEFAULT 5,
+            enabled           INTEGER NOT NULL DEFAULT 0,
+            strategy          TEXT NOT NULL DEFAULT '',
+            updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        INSERT OR IGNORE INTO trading_config (id) VALUES (1);
+        ",
+    )?;
+
     info!("database migrations complete");
     Ok(())
 }

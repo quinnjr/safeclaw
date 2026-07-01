@@ -2667,3 +2667,281 @@ fn relative_day_label(utc_dt: &chrono::DateTime<chrono::Utc>, tz: &chrono_tz::Tz
         local.format("%b %-d, %Y").to_string()
     }
 }
+
+// -- Trading (Robinhood paper-trading module) ----------------------------
+
+#[derive(Serialize)]
+pub struct WatchlistEntry {
+    pub symbol: String,
+    pub added_at: String,
+}
+
+pub async fn list_watchlist(State(state): State<DashState>) -> Result<Json<Vec<WatchlistEntry>>, StatusCode> {
+    let db = state.db.lock().await;
+    let mut stmt = db
+        .prepare("SELECT symbol, added_at FROM watchlist ORDER BY added_at")
+        .map_err(|e| {
+            error!("list watchlist: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(WatchlistEntry {
+                symbol: row.get(0)?,
+                added_at: row.get(1)?,
+            })
+        })
+        .and_then(Iterator::collect)
+        .map_err(|e| {
+            error!("list watchlist: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    Ok(Json(rows))
+}
+
+#[derive(Deserialize)]
+pub struct AddWatchlistBody {
+    pub symbol: String,
+}
+
+pub async fn add_watchlist(
+    State(state): State<DashState>,
+    Json(body): Json<AddWatchlistBody>,
+) -> Result<Json<ActionResponse>, StatusCode> {
+    let symbol = body.symbol.trim().to_uppercase();
+    if symbol.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let db = state.db.lock().await;
+    db.execute("INSERT OR IGNORE INTO watchlist (symbol) VALUES (?1)", [&symbol])
+        .map_err(|e| {
+            error!("add watchlist: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    Ok(Json(ActionResponse {
+        ok: true,
+        message: Some(format!("Added {symbol}")),
+        count: None,
+    }))
+}
+
+pub async fn remove_watchlist(
+    State(state): State<DashState>,
+    Path(symbol): Path<String>,
+) -> Result<Json<ActionResponse>, StatusCode> {
+    let symbol = symbol.trim().to_uppercase();
+    let db = state.db.lock().await;
+    let rows = db
+        .execute("DELETE FROM watchlist WHERE symbol = ?1", [&symbol])
+        .map_err(|e| {
+            error!("remove watchlist: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    Ok(Json(ActionResponse {
+        ok: rows > 0,
+        message: Some(if rows > 0 {
+            format!("Removed {symbol}")
+        } else {
+            format!("{symbol} was not on the watchlist")
+        }),
+        count: None,
+    }))
+}
+
+#[derive(Serialize)]
+pub struct PaperTrade {
+    pub id: i64,
+    pub symbol: String,
+    pub side: String,
+    pub qty: f64,
+    pub price: f64,
+    pub rationale: String,
+    pub decided_at: String,
+}
+
+pub async fn list_paper_trades(
+    State(state): State<DashState>,
+    Query(params): Query<PaginationQuery>,
+) -> Result<Json<Vec<PaperTrade>>, StatusCode> {
+    let limit = params.limit.unwrap_or(100) as i64;
+    let offset = params.offset.unwrap_or(0) as i64;
+    let db = state.db.lock().await;
+    let mut stmt = db
+        .prepare(
+            "SELECT id, symbol, side, qty, price, rationale, decided_at
+             FROM paper_trades ORDER BY decided_at DESC LIMIT ?1 OFFSET ?2",
+        )
+        .map_err(|e| {
+            error!("list paper trades: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    let rows = stmt
+        .query_map(rusqlite::params![limit, offset], |row| {
+            Ok(PaperTrade {
+                id: row.get(0)?,
+                symbol: row.get(1)?,
+                side: row.get(2)?,
+                qty: row.get(3)?,
+                price: row.get(4)?,
+                rationale: row.get(5)?,
+                decided_at: row.get(6)?,
+            })
+        })
+        .and_then(Iterator::collect)
+        .map_err(|e| {
+            error!("list paper trades: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    Ok(Json(rows))
+}
+
+#[derive(Serialize)]
+pub struct TradingStatus {
+    pub enabled: bool,
+    pub interval_minutes: u32,
+    pub last_tick: Option<String>,
+    /// Net cash flow from paper trades (sells minus buys), plus the value
+    /// of any open position marked at its own last traded price. This is
+    /// an approximation — it does not fetch a live quote — good enough for
+    /// tracking simulated performance without an extra API round trip on
+    /// every dashboard poll.
+    pub pnl_summary: f64,
+}
+
+pub async fn get_trading_status(State(state): State<DashState>) -> Result<Json<TradingStatus>, StatusCode> {
+    let db = state.db.lock().await;
+    let (enabled, interval_minutes): (bool, u32) = db
+        .query_row(
+            "SELECT enabled, interval_minutes FROM trading_config WHERE id = 1",
+            [],
+            |row| Ok((row.get::<_, i64>(0)? != 0, row.get::<_, i64>(1)? as u32)),
+        )
+        .map_err(|e| {
+            error!("get trading status: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let last_tick: Option<String> = db
+        .query_row("SELECT MAX(decided_at) FROM paper_trades", [], |row| row.get(0))
+        .map_err(|e| {
+            error!("get trading status: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let mut stmt = db
+        .prepare("SELECT symbol, side, qty, price FROM paper_trades ORDER BY decided_at")
+        .map_err(|e| {
+            error!("get trading status: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    let trades: Vec<(String, String, f64, f64)> = stmt
+        .query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })
+        .and_then(Iterator::collect)
+        .map_err(|e| {
+            error!("get trading status: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let mut cash_flow = 0.0;
+    let mut open_qty: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+    let mut last_price: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+    for (symbol, side, qty, price) in &trades {
+        let signed = if side == "sell" { *qty } else { -*qty };
+        cash_flow += signed * price;
+        *open_qty.entry(symbol.clone()).or_insert(0.0) += if side == "buy" { *qty } else { -*qty };
+        last_price.insert(symbol.clone(), *price);
+    }
+    let open_value: f64 = open_qty
+        .iter()
+        .map(|(symbol, qty)| qty * last_price.get(symbol).copied().unwrap_or(0.0))
+        .sum();
+
+    Ok(Json(TradingStatus {
+        enabled,
+        interval_minutes,
+        last_tick,
+        pnl_summary: cash_flow + open_value,
+    }))
+}
+
+#[derive(Deserialize)]
+pub struct TradingConfigBody {
+    pub interval_minutes: u32,
+    pub enabled: bool,
+    pub strategy: String,
+}
+
+pub async fn update_trading_config(
+    State(state): State<DashState>,
+    Json(body): Json<TradingConfigBody>,
+) -> Result<Json<ActionResponse>, StatusCode> {
+    let db = state.db.lock().await;
+    db.execute(
+        "UPDATE trading_config SET interval_minutes = ?1, enabled = ?2, strategy = ?3, updated_at = datetime('now') WHERE id = 1",
+        rusqlite::params![body.interval_minutes, body.enabled as i64, body.strategy],
+    )
+    .map_err(|e| {
+        error!("update trading config: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    // Keep the scheduled cron job in sync: remove any existing trading tick
+    // job, then re-add it if enabled. Simpler and less error-prone than
+    // trying to diff/update an existing job's schedule in place.
+    db.execute(
+        "DELETE FROM cron_jobs WHERE tool_call LIKE '%\"trading\"%\"tick\"%'",
+        [],
+    )
+    .map_err(|e| {
+        error!("update trading config: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    if body.enabled {
+        let id = uuid::Uuid::new_v4().to_string();
+        let schedule = format!("0 */{} * * * *", body.interval_minutes.max(1));
+        let tool_call = serde_json::json!({ "tool": "trading", "params": { "action": "tick" } }).to_string();
+        db.execute(
+            "INSERT INTO cron_jobs (id, name, schedule, tool_call) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![id, "trading-tick", schedule, tool_call],
+        )
+        .map_err(|e| {
+            error!("update trading config: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    }
+
+    Ok(Json(ActionResponse {
+        ok: true,
+        message: Some("Trading config updated".into()),
+        count: None,
+    }))
+}
+
+#[derive(Serialize)]
+pub struct TradingConfigResponse {
+    pub interval_minutes: u32,
+    pub enabled: bool,
+    pub strategy: String,
+}
+
+pub async fn get_trading_config(State(state): State<DashState>) -> Result<Json<TradingConfigResponse>, StatusCode> {
+    let db = state.db.lock().await;
+    let (interval_minutes, enabled, strategy): (u32, bool, String) = db
+        .query_row(
+            "SELECT interval_minutes, enabled, strategy FROM trading_config WHERE id = 1",
+            [],
+            |row| Ok((row.get::<_, i64>(0)? as u32, row.get::<_, i64>(1)? != 0, row.get(2)?)),
+        )
+        .map_err(|e| {
+            error!("get trading config: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    Ok(Json(TradingConfigResponse {
+        interval_minutes,
+        enabled,
+        strategy,
+    }))
+}

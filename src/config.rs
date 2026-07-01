@@ -427,6 +427,9 @@ pub struct ToolsConfig {
 
     #[serde(default)]
     pub screen: ScreenToolConfig,
+
+    #[serde(default)]
+    pub trading: TradingToolConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -511,6 +514,21 @@ pub struct ScreenToolConfig {
 }
 
 impl Default for ScreenToolConfig {
+    fn default() -> Self {
+        Self { enabled: false }
+    }
+}
+
+/// Robinhood agentic paper-trading tool. Disabled by default — requires
+/// `ROBINHOOD_AGENT_TOKEN` and explicit opt-in even before the runtime
+/// on/off switch in `trading_config` (controlled from the dashboard).
+#[derive(Debug, Clone, Deserialize)]
+pub struct TradingToolConfig {
+    #[serde(default)]
+    pub enabled: bool,
+}
+
+impl Default for TradingToolConfig {
     fn default() -> Self {
         Self { enabled: false }
     }

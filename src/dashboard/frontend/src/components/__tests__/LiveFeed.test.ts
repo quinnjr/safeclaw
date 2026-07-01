@@ -10,10 +10,10 @@ describe('LiveFeed', () => {
         vi.spyOn(api, 'api').mockResolvedValue([]);
     });
 
-    it('renders "No recent tool activity" when empty', async () => {
+    it('renders "No tool events yet" when empty', async () => {
         render(LiveFeed);
         await vi.waitFor(() => {
-            expect(screen.getByText(/No recent tool activity/)).toBeInTheDocument();
+            expect(screen.getByText(/No tool events yet/)).toBeInTheDocument();
         });
     });
 
@@ -36,16 +36,16 @@ describe('LiveFeed', () => {
         const button = screen.getByRole('button', { name: /Tool Activity/i });
         expect(button).toBeInTheDocument();
         // Initially expanded - content visible
-        expect(screen.getByText(/No recent tool activity/)).toBeInTheDocument();
+        expect(screen.getByText(/No tool events yet/)).toBeInTheDocument();
         await fireEvent.click(button);
         // After click, collapsed - content hidden (section with max-h-72 is inside expanded block)
         await vi.waitFor(() => {
-            expect(screen.queryByText(/No recent tool activity/)).not.toBeInTheDocument();
+            expect(screen.queryByText(/No tool events yet/)).not.toBeInTheDocument();
         });
         await fireEvent.click(button);
         // Expand again
         await vi.waitFor(() => {
-            expect(screen.getByText(/No recent tool activity/)).toBeInTheDocument();
+            expect(screen.getByText(/No tool events yet/)).toBeInTheDocument();
         });
     });
 });

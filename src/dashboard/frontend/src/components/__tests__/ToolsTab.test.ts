@@ -20,8 +20,8 @@ describe('ToolsTab', () => {
         expect(screen.getByText('Registered Tools')).toBeTruthy();
     });
 
-    it('shows empty state when no tools', () => {
+    it('shows empty state when no tools', async () => {
         render(ToolsTab);
-        expect(screen.getByText('No tools registered')).toBeTruthy();
+        expect(await screen.findByText(/No tools loaded/)).toBeTruthy();
     });
 });

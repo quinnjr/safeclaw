@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/svelte';
 import TrashTab from '../TrashTab.svelte';
 
 vi.mock('../../lib/api', () => ({
-    api: vi.fn(() => Promise.resolve({ items: [], stats: { count: 0, total_bytes: 0 } })),
+    api: vi.fn(() => Promise.resolve({ items: [], stats: { count: 1, total_bytes: 1024 } })),
 }));
 
 vi.mock('../../lib/state.svelte', () => ({
@@ -20,8 +20,8 @@ describe('TrashTab', () => {
         expect(screen.getByText('Trash')).toBeTruthy();
     });
 
-    it('renders Empty Trash button', () => {
+    it('renders Empty Trash button', async () => {
         render(TrashTab);
-        expect(screen.getByText('Empty Trash')).toBeTruthy();
+        expect(await screen.findByText('Empty Trash')).toBeTruthy();
     });
 });

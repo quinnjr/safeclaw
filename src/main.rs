@@ -727,6 +727,9 @@ fn build_tool_registry(
     if config.tools.screen.enabled {
         registry.register(Box::new(screen::ScreenTool::new(agent_ref.clone())));
     }
+    if config.tools.trading.enabled {
+        registry.register(Box::new(trading::RobinhoodTool::new(agent_ref.clone())));
+    }
     registry.register(Box::new(memory::MemorySearchTool));
     registry.register(Box::new(memory::MemoryGetTool));
     registry.register(Box::new(knowledge::KnowledgeGraphTool::new()));

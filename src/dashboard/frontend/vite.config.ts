@@ -11,7 +11,7 @@ export default defineConfig({
         globals: true,
         environment: 'jsdom',
         setupFiles: ['./src/test/setup.ts'],
-        testTransformMode: { web: [/\.svelte$/] },
+        testTransformMode: { web: [/\.svelte$/, /\.svelte\.[jt]s$/] },
     },
     build: {
         outDir: resolve(import.meta.dirname!, '../ui'),

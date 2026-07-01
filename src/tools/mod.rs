@@ -15,6 +15,7 @@ pub mod plan;
 pub mod process;
 pub mod screen;
 pub mod sessions;
+pub mod trading;
 pub mod voice;
 pub mod web;
 
