@@ -3,30 +3,40 @@ use std::sync::{Arc, OnceLock, Weak};
 use async_trait::async_trait;
 use chrono::{Datelike, Timelike};
 use chrono_tz::America::New_York;
+use daimon::mcp::protocol::McpToolInfo;
+use daimon::mcp::{HttpTransport, McpClient, StdioTransport};
 use serde_json::json;
+use tokio::sync::OnceCell;
 
 use super::{Tool, ToolContext, ToolOutput};
 use crate::agent::Agent;
 use crate::error::{Result, SafeAgentError};
 
-const ROBINHOOD_API_BASE_ENV: &str = "ROBINHOOD_AGENT_BASE_URL";
-const ROBINHOOD_API_BASE_DEFAULT: &str = "https://agent-api.robinhood.com/v1";
-const ROBINHOOD_TOKEN_ENV: &str = "ROBINHOOD_AGENT_TOKEN";
+const ROBINHOOD_TOKEN_ENV: &str = "ROBINHOOD_MCP_TOKEN";
 
-/// Robinhood agentic-API tool — quotes, positions, account, and an
-/// agent-managed watchlist. `paper_order` never places a real order; it
-/// only logs a simulated decision. The `tick` action runs one full
-/// LLM-reasoned pass over the watchlist by delegating to the `trader`
-/// persona in a sub-session, so the fixed scaffold (defined in the
-/// persona) and the user-editable strategy (session prompt, from
-/// `trading_config`) stay separate.
+/// Robinhood agentic trading — quote/positions/account are proxied to
+/// whatever MCP server `mcp_connection` points at (Robinhood's official
+/// Trading MCP by default), plus a locally-owned watchlist and paper-order
+/// log. `paper_order` never calls the MCP server or any network endpoint;
+/// it only logs a simulated decision, so there is no code path in this
+/// tool that can place a real order regardless of what the connected MCP
+/// server exposes. The `tick` action runs one full LLM-reasoned pass over
+/// the watchlist by delegating to the `trader` persona in a sub-session,
+/// so the fixed scaffold (defined in the persona) and the user-editable
+/// strategy (session prompt, from `trading_config`) stay separate.
 pub struct RobinhoodTool {
     agent_ref: Arc<OnceLock<Weak<Agent>>>,
+    connection: String,
+    mcp: OnceCell<McpClient>,
 }
 
 impl RobinhoodTool {
-    pub fn new(agent_ref: Arc<OnceLock<Weak<Agent>>>) -> Self {
-        Self { agent_ref }
+    pub fn new(agent_ref: Arc<OnceLock<Weak<Agent>>>, connection: impl Into<String>) -> Self {
+        Self {
+            agent_ref,
+            connection: connection.into(),
+            mcp: OnceCell::new(),
+        }
     }
 
     fn agent(&self) -> Result<Arc<Agent>> {
@@ -36,25 +46,98 @@ impl RobinhoodTool {
             .ok_or_else(|| SafeAgentError::Tool("agent not initialized".into()))
     }
 
-    fn base_url() -> String {
-        std::env::var(ROBINHOOD_API_BASE_ENV).unwrap_or_else(|_| ROBINHOOD_API_BASE_DEFAULT.into())
+    /// Connects on first use and caches the client for the tool's lifetime.
+    async fn mcp_client(&self) -> Result<&McpClient> {
+        self.mcp
+            .get_or_try_init(|| Self::connect(&self.connection))
+            .await
     }
 
-    fn token() -> Result<String> {
-        std::env::var(ROBINHOOD_TOKEN_ENV)
-            .map_err(|_| SafeAgentError::Tool(format!("{ROBINHOOD_TOKEN_ENV} is not set")))
+    /// An `http(s)://` connection string speaks Streamable HTTP (Robinhood's
+    /// official Trading MCP); anything else is treated as a command line and
+    /// spawned over stdio, e.g. a local authenticating proxy.
+    async fn connect(connection: &str) -> Result<McpClient> {
+        let connection = connection.trim();
+        if connection.is_empty() {
+            return Err(SafeAgentError::Config("trading.mcp_connection is empty".into()));
+        }
+
+        if connection.starts_with("http://") || connection.starts_with("https://") {
+            let mut transport = HttpTransport::new(connection);
+            if let Ok(token) = std::env::var(ROBINHOOD_TOKEN_ENV) {
+                if !token.is_empty() {
+                    transport = transport.with_header("Authorization", format!("Bearer {token}"));
+                }
+            }
+            McpClient::connect(transport)
+                .await
+                .map_err(|e| SafeAgentError::Tool(format!("Robinhood MCP connect failed: {e}")))
+        } else {
+            let mut parts = connection.split_whitespace();
+            let command = parts
+                .next()
+                .ok_or_else(|| SafeAgentError::Config("trading.mcp_connection is empty".into()))?;
+            let args: Vec<&str> = parts.collect();
+            let transport = StdioTransport::new(command, args)
+                .await
+                .map_err(|e| SafeAgentError::Tool(format!("Robinhood MCP spawn failed: {e}")))?;
+            McpClient::connect(transport)
+                .await
+                .map_err(|e| SafeAgentError::Tool(format!("Robinhood MCP handshake failed: {e}")))
+        }
     }
 
-    async fn get_json(ctx: &ToolContext, path: &str) -> Result<serde_json::Value> {
-        let url = format!("{}{}", Self::base_url(), path);
-        let resp = ctx
-            .http_client
-            .get(&url)
-            .bearer_auth(Self::token()?)
-            .send()
-            .await?
-            .error_for_status()?;
-        Ok(resp.json().await?)
+    /// Finds the first discovered MCP tool whose name or description
+    /// matches one of `keywords` (case-insensitive). Robinhood doesn't
+    /// publish a fixed tool-name contract for third-party MCP clients, so
+    /// read-only actions resolve by keyword against the server's own
+    /// `tools/list` response rather than a hardcoded name.
+    fn find_tool<'a>(client: &'a McpClient, keywords: &[&str]) -> Option<&'a McpToolInfo> {
+        client.tool_infos().iter().find(|t| {
+            let haystack = format!("{} {}", t.name, t.description.as_deref().unwrap_or(""))
+                .to_lowercase();
+            keywords.iter().any(|k| haystack.contains(k))
+        })
+    }
+
+    /// Builds `{ <ticker-property>: symbol }` from the tool's declared
+    /// input schema, so the argument key matches whatever the server calls
+    /// it (symbol/ticker/instrument) instead of guessing one name.
+    fn build_symbol_args(tool: &McpToolInfo, symbol: &str) -> serde_json::Value {
+        let key = tool
+            .input_schema
+            .get("properties")
+            .and_then(|p| p.as_object())
+            .and_then(|props| {
+                props
+                    .keys()
+                    .find(|k| matches!(k.to_lowercase().as_str(), "symbol" | "ticker" | "instrument"))
+            })
+            .cloned()
+            .unwrap_or_else(|| "symbol".to_string());
+        json!({ key: symbol })
+    }
+
+    /// Resolves a read-only role (quote/positions/account) to a discovered
+    /// MCP tool by keyword and calls it. Deliberately has no equivalent for
+    /// order placement — that stays local-only via `paper_order`.
+    async fn call_readonly(&self, keywords: &[&str], role: &str, symbol: Option<&str>) -> Result<ToolOutput> {
+        let client = self.mcp_client().await?;
+        let Some(tool) = Self::find_tool(client, keywords) else {
+            return Ok(ToolOutput::error(format!(
+                "no MCP tool matching '{role}' was found on the connected server; \
+                 use action=mcp_list_tools to see what's available"
+            )));
+        };
+        let args = symbol
+            .map(|s| Self::build_symbol_args(tool, s))
+            .unwrap_or_else(|| json!({}));
+        let name = tool.name.clone();
+
+        match client.call_tool(&name, &args).await {
+            Ok(text) => Ok(ToolOutput::ok_with_meta(text, json!({ "mcp_tool": name }))),
+            Err(e) => Ok(ToolOutput::error(format!("MCP tool '{name}' call failed: {e}"))),
+        }
     }
 }
 
@@ -78,11 +161,13 @@ impl Tool for RobinhoodTool {
     }
 
     fn description(&self) -> &str {
-        "Robinhood agentic paper-trading. Actions: quote, positions, account \
-         (read-only market data), watchlist_add, watchlist_remove, \
-         watchlist_list (agent-managed symbol list), paper_order (logs a \
-         simulated buy/sell decision, never places a real order), tick \
-         (runs one full reasoning pass over the watchlist)."
+        "Robinhood agentic paper-trading over MCP. Actions: quote, positions, \
+         account (proxied read-only to the connected Robinhood Trading MCP \
+         server), mcp_list_tools (debug: list tools the server exposes), \
+         watchlist_add, watchlist_remove, watchlist_list (agent-managed \
+         symbol list, local), paper_order (logs a simulated buy/sell \
+         decision locally, never calls the MCP server or places a real \
+         order), tick (runs one full reasoning pass over the watchlist)."
     }
 
     fn parameters_schema(&self) -> serde_json::Value {
@@ -92,7 +177,7 @@ impl Tool for RobinhoodTool {
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["quote", "positions", "account", "watchlist_add", "watchlist_remove", "watchlist_list", "paper_order", "tick"],
+                    "enum": ["quote", "positions", "account", "mcp_list_tools", "watchlist_add", "watchlist_remove", "watchlist_list", "paper_order", "tick"],
                     "description": "Action to perform"
                 },
                 "symbol": {
@@ -129,16 +214,24 @@ impl Tool for RobinhoodTool {
                 if symbol.is_empty() {
                     return Ok(ToolOutput::error("symbol is required for quote"));
                 }
-                let data = Self::get_json(ctx, &format!("/quotes/{symbol}")).await?;
-                Ok(ToolOutput::ok_with_meta(data.to_string(), data))
+                self.call_readonly(&["quote", "price"], "quote", Some(symbol)).await
             }
-            "positions" => {
-                let data = Self::get_json(ctx, "/positions").await?;
-                Ok(ToolOutput::ok_with_meta(data.to_string(), data))
-            }
+            "positions" => self.call_readonly(&["position"], "positions", None).await,
             "account" => {
-                let data = Self::get_json(ctx, "/account").await?;
-                Ok(ToolOutput::ok_with_meta(data.to_string(), data))
+                self.call_readonly(&["account", "portfolio", "balance"], "account", None).await
+            }
+            "mcp_list_tools" => {
+                let client = self.mcp_client().await?;
+                let listing: Vec<String> = client
+                    .tool_infos()
+                    .iter()
+                    .map(|t| format!("{}: {}", t.name, t.description.as_deref().unwrap_or("")))
+                    .collect();
+                if listing.is_empty() {
+                    Ok(ToolOutput::ok("Connected server exposes no tools."))
+                } else {
+                    Ok(ToolOutput::ok(listing.join("\n")))
+                }
             }
             "watchlist_add" => {
                 let symbol = params.get("symbol").and_then(|v| v.as_str()).unwrap_or_default();
@@ -180,9 +273,12 @@ impl Tool for RobinhoodTool {
                 }
             }
             "paper_order" => {
-                // Pure DB write — deliberately never calls any network
-                // endpoint, real or otherwise. Price comes from the
-                // caller's own prior `quote` call, not fetched again here.
+                // Pure DB write — deliberately never calls the MCP server
+                // or any network endpoint. Price comes from the caller's
+                // own prior `quote` call, not fetched again here. This is
+                // the only order-placing path this tool has; there is no
+                // action that forwards to whatever real order tool the
+                // connected MCP server exposes.
                 let symbol = params.get("symbol").and_then(|v| v.as_str()).unwrap_or_default();
                 let side = params.get("side").and_then(|v| v.as_str()).unwrap_or_default();
                 let qty = params.get("qty").and_then(|v| v.as_f64()).unwrap_or_default();
@@ -269,6 +365,12 @@ mod tests {
         }
     }
 
+    fn tool() -> RobinhoodTool {
+        // Connection is never dialed by the tests below — none of them
+        // exercise an action that calls mcp_client().
+        RobinhoodTool::new(Arc::new(OnceLock::new()), "https://agent.robinhood.com/mcp/trading")
+    }
+
     #[test]
     fn market_hours_weekday_open() {
         // Wed 2026-07-01 14:00 UTC = 10:00 ET (market open).
@@ -297,23 +399,53 @@ mod tests {
         assert!(!is_market_hours(t));
     }
 
+    #[test]
+    fn find_tool_matches_by_keyword() {
+        let infos = vec![
+            McpToolInfo { name: "get_quote".into(), description: Some("Fetch a live price".into()), input_schema: json!({}) },
+            McpToolInfo { name: "list_positions".into(), description: None, input_schema: json!({}) },
+        ];
+        // find_tool takes &McpClient, so exercise the matching logic directly
+        // against the same haystack it builds instead of requiring a live client.
+        let haystack = |t: &McpToolInfo| format!("{} {}", t.name, t.description.as_deref().unwrap_or("")).to_lowercase();
+        assert!(["quote", "price"].iter().any(|k| haystack(&infos[0]).contains(k)));
+        assert!(["position"].iter().any(|k| haystack(&infos[1]).contains(k)));
+        assert!(!["quote", "price"].iter().any(|k| haystack(&infos[1]).contains(k)));
+    }
+
+    #[test]
+    fn build_symbol_args_uses_schema_property_name() {
+        let tool = McpToolInfo {
+            name: "get_quote".into(),
+            description: None,
+            input_schema: json!({"type": "object", "properties": {"ticker": {"type": "string"}}}),
+        };
+        assert_eq!(RobinhoodTool::build_symbol_args(&tool, "AAPL"), json!({"ticker": "AAPL"}));
+    }
+
+    #[test]
+    fn build_symbol_args_falls_back_to_symbol() {
+        let tool = McpToolInfo { name: "get_quote".into(), description: None, input_schema: json!({}) };
+        assert_eq!(RobinhoodTool::build_symbol_args(&tool, "AAPL"), json!({"symbol": "AAPL"}));
+    }
+
     #[tokio::test]
     async fn watchlist_add_list_remove() {
         let ctx = test_ctx();
-        let tool = RobinhoodTool::new(Arc::new(OnceLock::new()));
+        let t = tool();
 
-        let add = tool
+        let add = t
             .execute(json!({"action": "watchlist_add", "symbol": "aapl"}), &ctx)
             .await
             .unwrap();
         assert!(add.success);
         assert!(add.output.contains("AAPL"));
 
-        let list = tool.execute(json!({"action": "watchlist_list"}), &ctx).await.unwrap();
+        let list = t.execute(json!({"action": "watchlist_list"}), &ctx).await.unwrap();
         assert!(list.success);
         assert!(list.output.contains("AAPL"));
 
-        let remove = tool
+        let remove = t
             .execute(json!({"action": "watchlist_remove", "symbol": "AAPL"}), &ctx)
             .await
             .unwrap();
@@ -324,8 +456,8 @@ mod tests {
     #[tokio::test]
     async fn paper_order_requires_fields() {
         let ctx = test_ctx();
-        let tool = RobinhoodTool::new(Arc::new(OnceLock::new()));
-        let r = tool
+        let t = tool();
+        let r = t
             .execute(json!({"action": "paper_order", "symbol": "AAPL"}), &ctx)
             .await
             .unwrap();
@@ -336,8 +468,8 @@ mod tests {
     #[tokio::test]
     async fn paper_order_rejects_bad_side() {
         let ctx = test_ctx();
-        let tool = RobinhoodTool::new(Arc::new(OnceLock::new()));
-        let r = tool
+        let t = tool();
+        let r = t
             .execute(
                 json!({"action": "paper_order", "symbol": "AAPL", "side": "yolo", "qty": 1, "price": 100.0, "rationale": "test"}),
                 &ctx,
@@ -348,23 +480,15 @@ mod tests {
         assert!(r.output.contains("buy"));
     }
 
-    /// Structural safety guarantee: paper_order is a pure DB write with no
-    /// http client in the ToolContext at all, so it cannot reach the
-    /// network — it must fail if it tried, since there's no client to use.
+    /// Structural safety guarantee: paper_order never calls mcp_client(),
+    /// so it cannot reach the MCP server (or any network endpoint) even if
+    /// the connection string points at a live Robinhood account.
     #[tokio::test]
     async fn paper_order_never_touches_the_network() {
-        let mut ctx = test_ctx();
-        // A client with no connect timeout budget pointed at a reserved,
-        // non-routable address — any network attempt would hang/fail long
-        // past this test's scope. Success here proves paper_order never
-        // even tries.
-        ctx.http_client = reqwest::Client::builder()
-            .connect_timeout(std::time::Duration::from_millis(1))
-            .build()
-            .unwrap();
-
-        let tool = RobinhoodTool::new(Arc::new(OnceLock::new()));
-        let r = tool
+        // A connection string that would hang/fail if ever dialed.
+        let t = RobinhoodTool::new(Arc::new(OnceLock::new()), "http://192.0.2.1:1/unreachable");
+        let ctx = test_ctx();
+        let r = t
             .execute(
                 json!({"action": "paper_order", "symbol": "AAPL", "side": "buy", "qty": 1, "price": 190.5, "rationale": "test"}),
                 &ctx,
@@ -378,18 +502,18 @@ mod tests {
     #[tokio::test]
     async fn unknown_action() {
         let ctx = test_ctx();
-        let tool = RobinhoodTool::new(Arc::new(OnceLock::new()));
-        let r = tool.execute(json!({"action": "nope"}), &ctx).await.unwrap();
+        let t = tool();
+        let r = t.execute(json!({"action": "nope"}), &ctx).await.unwrap();
         assert!(!r.success);
         assert!(r.output.contains("unknown action"));
     }
 
     #[test]
     fn tool_metadata() {
-        let tool = RobinhoodTool::new(Arc::new(OnceLock::new()));
-        assert_eq!(tool.name(), "trading");
-        assert!(!tool.description().is_empty());
-        let schema = tool.parameters_schema();
+        let t = tool();
+        assert_eq!(t.name(), "trading");
+        assert!(!t.description().is_empty());
+        let schema = t.parameters_schema();
         assert!(schema["required"].as_array().unwrap().contains(&json!("action")));
     }
 }

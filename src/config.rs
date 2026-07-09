@@ -519,19 +519,36 @@ impl Default for ScreenToolConfig {
     }
 }
 
-/// Robinhood agentic paper-trading tool. Disabled by default — requires
-/// `ROBINHOOD_AGENT_TOKEN` and explicit opt-in even before the runtime
-/// on/off switch in `trading_config` (controlled from the dashboard).
+/// Robinhood agentic paper-trading tool. Disabled by default, and requires
+/// the `daimon` build feature (it connects to Robinhood's Trading MCP
+/// server via daimon's MCP client) plus explicit opt-in here, even before
+/// the runtime on/off switch in `trading_config` (controlled from the
+/// dashboard).
 #[derive(Debug, Clone, Deserialize)]
 pub struct TradingToolConfig {
     #[serde(default)]
     pub enabled: bool,
+
+    /// MCP server connection string. An `http://`/`https://` URL connects
+    /// over Streamable HTTP (Robinhood's official Trading MCP endpoint,
+    /// the default); anything else is treated as a shell command line and
+    /// spawned over stdio (e.g. a local authenticating proxy). Optional
+    /// bearer auth for the HTTP case comes from `ROBINHOOD_MCP_TOKEN`.
+    #[serde(default = "default_robinhood_mcp_connection")]
+    pub mcp_connection: String,
 }
 
 impl Default for TradingToolConfig {
     fn default() -> Self {
-        Self { enabled: false }
+        Self {
+            enabled: false,
+            mcp_connection: default_robinhood_mcp_connection(),
+        }
     }
+}
+
+fn default_robinhood_mcp_connection() -> String {
+    "https://agent.robinhood.com/mcp/trading".to_string()
 }
 
 // -- Dashboard -----------------------------------------------------------

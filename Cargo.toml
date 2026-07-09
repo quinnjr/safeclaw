@@ -15,7 +15,7 @@ discord = ["dep:serenity"]
 [dependencies]
 
 # Local LLM inference (optional — enabled with --features local)
-llama-gguf = { version = "0.11.3", default-features = false, features = ["cpu"], optional = true }
+llama-gguf = { version = "0.13.0", default-features = false, features = ["cpu"], optional = true }
 
 # Agentic framework (optional — enabled with --features daimon)
 daimon = { version = "0.16", default-features = false, features = ["macros", "mcp"], optional = true }

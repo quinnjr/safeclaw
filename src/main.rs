@@ -727,8 +727,12 @@ fn build_tool_registry(
     if config.tools.screen.enabled {
         registry.register(Box::new(screen::ScreenTool::new(agent_ref.clone())));
     }
+    #[cfg(feature = "daimon")]
     if config.tools.trading.enabled {
-        registry.register(Box::new(trading::RobinhoodTool::new(agent_ref.clone())));
+        registry.register(Box::new(trading::RobinhoodTool::new(
+            agent_ref.clone(),
+            config.tools.trading.mcp_connection.clone(),
+        )));
     }
     registry.register(Box::new(memory::MemorySearchTool));
     registry.register(Box::new(memory::MemoryGetTool));
