@@ -115,7 +115,7 @@ struct ErrorBody {
 
 impl OpenRouterEngine {
     pub fn new(config: &Config) -> Result<Self> {
-        let api_key = std::env::var("OPENROUTER_API_KEY")
+        let api_key = crate::secrets::var("OPENROUTER_API_KEY")
             .ok()
             .or_else(|| {
                 if config.llm.openrouter_api_key.is_empty() {

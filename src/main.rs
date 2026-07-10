@@ -512,7 +512,7 @@ async fn main() {
 
     // Start ngrok tunnel (if enabled)
     let tunnel_url = if config.tunnel.enabled
-        || std::env::var("NGROK_AUTHTOKEN").is_ok()
+        || crate::secrets::var("NGROK_AUTHTOKEN").is_ok()
     {
         let dash_port = config
             .dashboard_bind
@@ -796,7 +796,7 @@ async fn run_checks(config: &Config, _sandbox: &SandboxedFs) {
                 }
             }
 
-            match std::env::var("CODEX_API_KEY") {
+            match crate::secrets::var("CODEX_API_KEY") {
                 Ok(_) => info!("CODEX_API_KEY: set"),
                 Err(_) => info!("CODEX_API_KEY: not set (will use saved auth)"),
             }
@@ -822,7 +822,7 @@ async fn run_checks(config: &Config, _sandbox: &SandboxedFs) {
                 }
             }
 
-            match std::env::var("GEMINI_API_KEY").or(std::env::var("GOOGLE_API_KEY")) {
+            match crate::secrets::var("GEMINI_API_KEY").or(crate::secrets::var("GOOGLE_API_KEY")) {
                 Ok(_) => info!("GEMINI_API_KEY / GOOGLE_API_KEY: set"),
                 Err(_) => info!("GEMINI_API_KEY: not set (will use saved auth)"),
             }
@@ -878,7 +878,7 @@ async fn run_checks(config: &Config, _sandbox: &SandboxedFs) {
     }
 
     // Tunnel check
-    let tunnel_enabled = config.tunnel.enabled || std::env::var("NGROK_AUTHTOKEN").is_ok();
+    let tunnel_enabled = config.tunnel.enabled || crate::secrets::var("NGROK_AUTHTOKEN").is_ok();
     if tunnel_enabled {
         let provider = config.tunnel.provider.as_str();
         info!("tunnel provider: {provider}");
@@ -905,7 +905,7 @@ async fn run_checks(config: &Config, _sandbox: &SandboxedFs) {
                     }
                 }
 
-                match std::env::var("NGROK_AUTHTOKEN") {
+                match crate::secrets::var("NGROK_AUTHTOKEN") {
                     Ok(_) => info!("NGROK_AUTHTOKEN: set"),
                     Err(_) => info!("NGROK_AUTHTOKEN: not set (ngrok will use saved auth)"),
                 }

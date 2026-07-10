@@ -1413,12 +1413,12 @@ impl Config {
             .map_err(|_| SafeAgentError::Config("TELEGRAM_BOT_TOKEN not set in OS secrets store".into()))
     }
 
-    /// Read Twilio credentials from environment variables.
+    /// Read Twilio credentials from the OS secrets store.
     pub fn twilio_credentials() -> Result<(String, String)> {
-        let sid = std::env::var("TWILIO_ACCOUNT_SID")
-            .map_err(|_| SafeAgentError::Config("TWILIO_ACCOUNT_SID not set".into()))?;
-        let token = std::env::var("TWILIO_AUTH_TOKEN")
-            .map_err(|_| SafeAgentError::Config("TWILIO_AUTH_TOKEN not set".into()))?;
+        let sid = crate::secrets::var("TWILIO_ACCOUNT_SID")
+            .map_err(|_| SafeAgentError::Config("TWILIO_ACCOUNT_SID not set in OS secrets store".into()))?;
+        let token = crate::secrets::var("TWILIO_AUTH_TOKEN")
+            .map_err(|_| SafeAgentError::Config("TWILIO_AUTH_TOKEN not set in OS secrets store".into()))?;
         Ok((sid, token))
     }
 
