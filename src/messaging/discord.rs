@@ -241,7 +241,7 @@ pub async fn start(
     config: DiscordConfig,
     agent: Arc<Agent>,
 ) -> Result<tokio::sync::oneshot::Sender<()>> {
-    let token = std::env::var("DISCORD_BOT_TOKEN").map_err(|_| {
+    let token = crate::secrets::var("DISCORD_BOT_TOKEN").map_err(|_| {
         crate::error::SafeAgentError::Config("DISCORD_BOT_TOKEN not set".into())
     })?;
 

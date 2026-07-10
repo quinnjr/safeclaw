@@ -303,7 +303,7 @@ async fn main() {
     // Register Discord backend (if enabled)
     #[cfg(feature = "discord")]
     if config.discord.enabled {
-        match std::env::var("DISCORD_BOT_TOKEN") {
+        match crate::secrets::var("DISCORD_BOT_TOKEN") {
             Ok(token) => {
                 let http = Arc::new(serenity::all::Http::new(&token));
                 let backend = Arc::new(messaging::discord::DiscordBackend::new(http));
@@ -339,7 +339,7 @@ async fn main() {
 
     // Register Slack bot backend (if enabled)
     if config.slack.enabled {
-        match std::env::var("SLACK_BOT_TOKEN") {
+        match crate::secrets::var("SLACK_BOT_TOKEN") {
             Ok(token) => {
                 let backend = Arc::new(messaging::slack::SlackBackend::new(token));
                 let primary_channel = config
@@ -359,7 +359,7 @@ async fn main() {
 
     // Register Matrix backend (if enabled)
     let matrix_backend: Option<Arc<messaging::matrix::MatrixBackend>> = if config.matrix.enabled {
-        match std::env::var("MATRIX_ACCESS_TOKEN") {
+        match crate::secrets::var("MATRIX_ACCESS_TOKEN") {
             Ok(token) => {
                 let backend = Arc::new(messaging::matrix::MatrixBackend::new(
                     config.matrix.homeserver.clone(),
@@ -379,7 +379,7 @@ async fn main() {
                 // Try login with username/password
                 if let (Ok(user), Ok(pass)) = (
                     std::env::var("MATRIX_USER"),
-                    std::env::var("MATRIX_PASSWORD"),
+                    crate::secrets::var("MATRIX_PASSWORD"),
                 ) {
                     match messaging::matrix::MatrixBackend::login(
                         &config.matrix.homeserver,
@@ -634,7 +634,7 @@ async fn maybe_start_discord(
     config: &Config,
     agent: &Arc<Agent>,
 ) -> Option<tokio::sync::oneshot::Sender<()>> {
-    if config.discord.enabled && std::env::var("DISCORD_BOT_TOKEN").is_ok() {
+    if config.discord.enabled && crate::secrets::var("DISCORD_BOT_TOKEN").is_ok() {
         match messaging::discord::start(config.discord.clone(), agent.clone()).await {
             Ok(tx) => {
                 info!("discord bot started");

@@ -1407,10 +1407,10 @@ impl Config {
             .join("safeclaw")
     }
 
-    /// Get the Telegram bot token from the environment.
+    /// Get the Telegram bot token from the OS secrets store.
     pub fn telegram_bot_token() -> Result<String> {
-        std::env::var("TELEGRAM_BOT_TOKEN")
-            .map_err(|_| SafeAgentError::Config("TELEGRAM_BOT_TOKEN environment variable not set".into()))
+        crate::secrets::var("TELEGRAM_BOT_TOKEN")
+            .map_err(|_| SafeAgentError::Config("TELEGRAM_BOT_TOKEN not set in OS secrets store".into()))
     }
 
     /// Read Twilio credentials from environment variables.
