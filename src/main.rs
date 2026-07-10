@@ -13,6 +13,7 @@ mod installer;
 mod llm;
 mod memory;
 mod messaging;
+mod secrets;
 mod security;
 mod skills;
 mod tools;
