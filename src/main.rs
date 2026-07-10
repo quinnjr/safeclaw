@@ -1088,10 +1088,8 @@ LLM BACKEND:
     CODEX_BIN             Path to codex CLI binary (codex backend)
     CODEX_MODEL           Model name: gpt-5-codex, o3, etc. (codex backend)
     CODEX_PROFILE         Codex config profile name (codex backend)
-    CODEX_API_KEY         OpenAI API key for Codex (codex backend, optional)
     GEMINI_BIN            Path to gemini CLI binary (gemini backend)
     GEMINI_MODEL          Model name: gemini-2.5-pro, etc. (gemini backend)
-    GEMINI_API_KEY        Google AI Studio API key (gemini backend, optional)
     AIDER_BIN             Path to aider binary (aider backend)
     AIDER_MODEL           Model string: gpt-4o, claude-3.5-sonnet (aider backend)
     MODEL_PATH            Path to .gguf model file (local backend)
@@ -1115,12 +1113,16 @@ TUNNEL:
     TAILSCALE_TUNNEL_URL  Static URL (skip spawning tailscale)
 
 ENVIRONMENT:
-    Secrets (DASHBOARD_PASSWORD, JWT_SECRET, TELEGRAM_BOT_TOKEN, etc.) are
-    read from the OS secrets store, not env vars. Set them with:
+    Secrets (DASHBOARD_PASSWORD, JWT_SECRET, TELEGRAM_BOT_TOKEN, CODEX_API_KEY,
+    GEMINI_API_KEY, etc.) are read from the OS secrets store, not env vars.
+    Set them with:
       Linux:  secret-tool store --label=\"safeclaw: NAME\" service safeclaw username NAME
       macOS:  security add-generic-password -s safeclaw -a NAME -w
     DASHBOARD_PASSWORD and JWT_SECRET are required; TELEGRAM_BOT_TOKEN is
     required if Telegram is enabled.
+    EXCEPTION: the aider backend reads provider keys (OPENAI_API_KEY,
+    ANTHROPIC_API_KEY, GEMINI_API_KEY, etc.) from the real process
+    environment, not the keyring, since aider runs as an external subprocess.
 
     RUST_LOG              Optional. Tracing filter (default: info).
 "
