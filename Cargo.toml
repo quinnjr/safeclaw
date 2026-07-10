@@ -102,9 +102,22 @@ libc = "0.2"
 rlimit = "0.10"
 
 # Linux-only kernel sandboxing
+# (NOTE: TOML disallows duplicate `[target.'cfg(target_os = "linux")'.dependencies]`
+# table headers within a single file — despite Cargo conceptually merging
+# duplicate target tables across separate files, `toml` errors with "duplicate key"
+# if the same table header appears twice in one Cargo.toml. The keyring entry below
+# is therefore merged into this same table rather than kept as a separate section.)
 [target.'cfg(target_os = "linux")'.dependencies]
 landlock = "0.4"
 seccompiler = "0.5"
+# OS secrets store (safeclaw::secrets) — per-OS keyring backend
+keyring = { version = "3", features = ["sync-secret-service", "vendored"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
 
 [dev-dependencies]
 tempfile = "3"

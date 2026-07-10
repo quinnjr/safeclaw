@@ -58,7 +58,7 @@ pub fn build(
     let password_required = config.dashboard.password_enabled
         && config.dashboard.sso_providers.is_empty();
 
-    let dashboard_password = std::env::var("DASHBOARD_PASSWORD")
+    let dashboard_password = crate::secrets::var("DASHBOARD_PASSWORD")
         .ok()
         .filter(|s| !s.is_empty())
         .or_else(|| {
@@ -71,16 +71,22 @@ pub fn build(
         })
         .ok_or_else(|| {
             SafeAgentError::Config(
-                "DASHBOARD_PASSWORD environment variable is required but not set".to_string(),
+                "DASHBOARD_PASSWORD not set. Set it in the OS secrets store: \
+                 `secret-tool store --label='safeclaw: DASHBOARD_PASSWORD' service safeclaw username DASHBOARD_PASSWORD` \
+                 (Linux) or `security add-generic-password -s safeclaw -a DASHBOARD_PASSWORD -w` (macOS)"
+                    .to_string(),
             )
         })?;
 
-    let jwt_secret_str = std::env::var("JWT_SECRET")
+    let jwt_secret_str = crate::secrets::var("JWT_SECRET")
         .ok()
         .filter(|s| !s.is_empty())
         .ok_or_else(|| {
             SafeAgentError::Config(
-                "JWT_SECRET environment variable is required but not set".to_string(),
+                "JWT_SECRET not set. Set it in the OS secrets store: \
+                 `secret-tool store --label='safeclaw: JWT_SECRET' service safeclaw username JWT_SECRET` \
+                 (Linux) or `security add-generic-password -s safeclaw -a JWT_SECRET -w` (macOS)"
+                    .to_string(),
             )
         })?;
 

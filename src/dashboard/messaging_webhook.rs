@@ -357,7 +357,7 @@ pub struct MessagingConfigResponse {
 pub async fn messaging_config(
     State(state): State<DashState>,
 ) -> Json<MessagingConfigResponse> {
-    let has_token = std::env::var("TELEGRAM_BOT_TOKEN").is_ok();
+    let has_token = crate::secrets::var("TELEGRAM_BOT_TOKEN").is_ok();
     let tg_connected = state.messaging.get("telegram").is_some();
     let tg_primary = state.messaging.primary_channel("telegram").map(|s| s.to_string());
 

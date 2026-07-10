@@ -68,9 +68,9 @@ impl Tool for TranscribeTool {
             return Ok(ToolOutput::error("audio file too large (max 25 MiB)"));
         }
 
-        let api_key = std::env::var("OPENAI_API_KEY")
-            .or_else(|_| std::env::var("WHISPER_API_KEY"))
-            .or_else(|_| std::env::var("OPENROUTER_API_KEY"))
+        let api_key = crate::secrets::var("OPENAI_API_KEY")
+            .or_else(|_| crate::secrets::var("WHISPER_API_KEY"))
+            .or_else(|_| crate::secrets::var("OPENROUTER_API_KEY"))
             .unwrap_or_default();
 
         let base_url = std::env::var("WHISPER_API_URL")
@@ -189,8 +189,8 @@ impl Tool for SpeakTool {
             return Ok(ToolOutput::error("text too long (max 4096 characters)"));
         }
 
-        let api_key = std::env::var("OPENAI_API_KEY")
-            .or_else(|_| std::env::var("TTS_API_KEY"))
+        let api_key = crate::secrets::var("OPENAI_API_KEY")
+            .or_else(|_| crate::secrets::var("TTS_API_KEY"))
             .unwrap_or_default();
 
         let base_url = std::env::var("TTS_API_URL")

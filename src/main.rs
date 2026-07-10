@@ -13,6 +13,7 @@ mod installer;
 mod llm;
 mod memory;
 mod messaging;
+mod secrets;
 mod security;
 mod skills;
 mod tools;
@@ -302,7 +303,7 @@ async fn main() {
     // Register Discord backend (if enabled)
     #[cfg(feature = "discord")]
     if config.discord.enabled {
-        match std::env::var("DISCORD_BOT_TOKEN") {
+        match crate::secrets::var("DISCORD_BOT_TOKEN") {
             Ok(token) => {
                 let http = Arc::new(serenity::all::Http::new(&token));
                 let backend = Arc::new(messaging::discord::DiscordBackend::new(http));
@@ -338,7 +339,7 @@ async fn main() {
 
     // Register Slack bot backend (if enabled)
     if config.slack.enabled {
-        match std::env::var("SLACK_BOT_TOKEN") {
+        match crate::secrets::var("SLACK_BOT_TOKEN") {
             Ok(token) => {
                 let backend = Arc::new(messaging::slack::SlackBackend::new(token));
                 let primary_channel = config
@@ -358,7 +359,7 @@ async fn main() {
 
     // Register Matrix backend (if enabled)
     let matrix_backend: Option<Arc<messaging::matrix::MatrixBackend>> = if config.matrix.enabled {
-        match std::env::var("MATRIX_ACCESS_TOKEN") {
+        match crate::secrets::var("MATRIX_ACCESS_TOKEN") {
             Ok(token) => {
                 let backend = Arc::new(messaging::matrix::MatrixBackend::new(
                     config.matrix.homeserver.clone(),
@@ -378,7 +379,7 @@ async fn main() {
                 // Try login with username/password
                 if let (Ok(user), Ok(pass)) = (
                     std::env::var("MATRIX_USER"),
-                    std::env::var("MATRIX_PASSWORD"),
+                    crate::secrets::var("MATRIX_PASSWORD"),
                 ) {
                     match messaging::matrix::MatrixBackend::login(
                         &config.matrix.homeserver,
@@ -511,7 +512,7 @@ async fn main() {
 
     // Start ngrok tunnel (if enabled)
     let tunnel_url = if config.tunnel.enabled
-        || std::env::var("NGROK_AUTHTOKEN").is_ok()
+        || crate::secrets::var("NGROK_AUTHTOKEN").is_ok()
     {
         let dash_port = config
             .dashboard_bind
@@ -633,7 +634,7 @@ async fn maybe_start_discord(
     config: &Config,
     agent: &Arc<Agent>,
 ) -> Option<tokio::sync::oneshot::Sender<()>> {
-    if config.discord.enabled && std::env::var("DISCORD_BOT_TOKEN").is_ok() {
+    if config.discord.enabled && crate::secrets::var("DISCORD_BOT_TOKEN").is_ok() {
         match messaging::discord::start(config.discord.clone(), agent.clone()).await {
             Ok(tx) => {
                 info!("discord bot started");
@@ -795,7 +796,7 @@ async fn run_checks(config: &Config, _sandbox: &SandboxedFs) {
                 }
             }
 
-            match std::env::var("CODEX_API_KEY") {
+            match crate::secrets::var("CODEX_API_KEY") {
                 Ok(_) => info!("CODEX_API_KEY: set"),
                 Err(_) => info!("CODEX_API_KEY: not set (will use saved auth)"),
             }
@@ -821,7 +822,7 @@ async fn run_checks(config: &Config, _sandbox: &SandboxedFs) {
                 }
             }
 
-            match std::env::var("GEMINI_API_KEY").or(std::env::var("GOOGLE_API_KEY")) {
+            match crate::secrets::var("GEMINI_API_KEY").or(crate::secrets::var("GOOGLE_API_KEY")) {
                 Ok(_) => info!("GEMINI_API_KEY / GOOGLE_API_KEY: set"),
                 Err(_) => info!("GEMINI_API_KEY: not set (will use saved auth)"),
             }
@@ -877,7 +878,7 @@ async fn run_checks(config: &Config, _sandbox: &SandboxedFs) {
     }
 
     // Tunnel check
-    let tunnel_enabled = config.tunnel.enabled || std::env::var("NGROK_AUTHTOKEN").is_ok();
+    let tunnel_enabled = config.tunnel.enabled || crate::secrets::var("NGROK_AUTHTOKEN").is_ok();
     if tunnel_enabled {
         let provider = config.tunnel.provider.as_str();
         info!("tunnel provider: {provider}");
@@ -904,7 +905,7 @@ async fn run_checks(config: &Config, _sandbox: &SandboxedFs) {
                     }
                 }
 
-                match std::env::var("NGROK_AUTHTOKEN") {
+                match crate::secrets::var("NGROK_AUTHTOKEN") {
                     Ok(_) => info!("NGROK_AUTHTOKEN: set"),
                     Err(_) => info!("NGROK_AUTHTOKEN: not set (ngrok will use saved auth)"),
                 }
@@ -1087,10 +1088,8 @@ LLM BACKEND:
     CODEX_BIN             Path to codex CLI binary (codex backend)
     CODEX_MODEL           Model name: gpt-5-codex, o3, etc. (codex backend)
     CODEX_PROFILE         Codex config profile name (codex backend)
-    CODEX_API_KEY         OpenAI API key for Codex (codex backend, optional)
     GEMINI_BIN            Path to gemini CLI binary (gemini backend)
     GEMINI_MODEL          Model name: gemini-2.5-pro, etc. (gemini backend)
-    GEMINI_API_KEY        Google AI Studio API key (gemini backend, optional)
     AIDER_BIN             Path to aider binary (aider backend)
     AIDER_MODEL           Model string: gpt-4o, claude-3.5-sonnet (aider backend)
     MODEL_PATH            Path to .gguf model file (local backend)
@@ -1114,9 +1113,17 @@ TUNNEL:
     TAILSCALE_TUNNEL_URL  Static URL (skip spawning tailscale)
 
 ENVIRONMENT:
-    DASHBOARD_PASSWORD    Required. Dashboard login password.
-    JWT_SECRET            Required. Secret for signing dashboard JWT cookies.
-    TELEGRAM_BOT_TOKEN    Required if Telegram is enabled.
+    Secrets (DASHBOARD_PASSWORD, JWT_SECRET, TELEGRAM_BOT_TOKEN, CODEX_API_KEY,
+    GEMINI_API_KEY, etc.) are read from the OS secrets store, not env vars.
+    Set them with:
+      Linux:  secret-tool store --label=\"safeclaw: NAME\" service safeclaw username NAME
+      macOS:  security add-generic-password -s safeclaw -a NAME -w
+    DASHBOARD_PASSWORD and JWT_SECRET are required; TELEGRAM_BOT_TOKEN is
+    required if Telegram is enabled.
+    EXCEPTION: the aider backend reads provider keys (OPENAI_API_KEY,
+    ANTHROPIC_API_KEY, GEMINI_API_KEY, etc.) from the real process
+    environment, not the keyring, since aider runs as an external subprocess.
+
     RUST_LOG              Optional. Tracing filter (default: info).
 "
     );

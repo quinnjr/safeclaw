@@ -24,7 +24,7 @@ pub async fn start(
     let ngrok_bin = std::env::var("NGROK_BIN")
         .unwrap_or_else(|_| config.bin.clone());
 
-    let authtoken = std::env::var("NGROK_AUTHTOKEN").ok().or_else(|| {
+    let authtoken = crate::secrets::var("NGROK_AUTHTOKEN").ok().or_else(|| {
         if config.authtoken.is_empty() {
             None
         } else {

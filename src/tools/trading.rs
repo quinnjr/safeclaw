@@ -64,7 +64,7 @@ impl RobinhoodTool {
 
         if connection.starts_with("http://") || connection.starts_with("https://") {
             let mut transport = HttpTransport::new(connection);
-            if let Ok(token) = std::env::var(ROBINHOOD_TOKEN_ENV) {
+            if let Ok(token) = crate::secrets::var(ROBINHOOD_TOKEN_ENV) {
                 if !token.is_empty() {
                     transport = transport.with_header("Authorization", format!("Bearer {token}"));
                 }

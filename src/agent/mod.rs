@@ -113,7 +113,7 @@ impl Agent {
 
         // Initialize skill manager
         let skills_dir = sandbox.root().join("skills");
-        let bot_token = std::env::var("TELEGRAM_BOT_TOKEN").ok();
+        let bot_token = crate::secrets::var("TELEGRAM_BOT_TOKEN").ok();
         let telegram_chat_id = messaging
             .primary_channel("telegram")
             .and_then(|s| s.parse::<i64>().ok());
