@@ -3,7 +3,7 @@
 //! surrounding `.ok()` / `match` / `?` logic when switching from env vars.
 
 use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 const SERVICE: &str = "safeclaw";
 
@@ -19,23 +19,40 @@ const SERVICE: &str = "safeclaw";
 /// test setup code) reuse the same `Entry` object, which is required for the
 /// mock backend to behave sensibly in tests and is a harmless (slightly
 /// cheaper) optimization under real backends.
-fn entry_cache() -> &'static Mutex<HashMap<String, keyring::Entry>> {
-    static CACHE: OnceLock<Mutex<HashMap<String, keyring::Entry>>> = OnceLock::new();
+// Entries are wrapped in `Arc` so a lookup can clone the `Arc` (cheap,
+// O(1) refcount bump) out from behind the lock and release the lock
+// *before* running `f`, which may perform a real blocking D-Bus/Keychain/
+// Credential-Manager round trip. Without this, every secret lookup for
+// every name would serialize behind one process-wide lock for the
+// duration of that I/O.
+//
+// The cache never evicts entries. That's fine at the expected scale
+// (~18 named secrets used across the codebase); revisit if that scope
+// grows significantly.
+fn entry_cache() -> &'static Mutex<HashMap<String, Arc<keyring::Entry>>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, Arc<keyring::Entry>>>> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 /// Run `f` against the cached `Entry` for `name`, creating and caching it
-/// first if this is the first lookup for that name.
+/// first if this is the first lookup for that name. The lock is held only
+/// long enough to look up/insert into the `HashMap`; `f` (and any I/O it
+/// performs) runs after the lock has been released.
 fn with_cached_entry<T>(
     name: &str,
     f: impl FnOnce(&keyring::Entry) -> T,
 ) -> Result<T, keyring::Error> {
-    let mut cache = entry_cache().lock().expect("secrets entry cache poisoned");
-    if !cache.contains_key(name) {
-        let entry = keyring::Entry::new(SERVICE, name)?;
-        cache.insert(name.to_string(), entry);
-    }
-    Ok(f(cache.get(name).expect("entry just inserted or present")))
+    let entry = {
+        let mut cache = entry_cache()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if !cache.contains_key(name) {
+            let entry = keyring::Entry::new(SERVICE, name)?;
+            cache.insert(name.to_string(), Arc::new(entry));
+        }
+        Arc::clone(cache.get(name).expect("entry just inserted or present"))
+    };
+    Ok(f(&entry))
 }
 
 /// Look up `name` in the OS secrets store (Secret Service on Linux,
