@@ -2,58 +2,7 @@
 //! `std::env::var`-shaped API so call sites don't need to change their
 //! surrounding `.ok()` / `match` / `?` logic when switching from env vars.
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex, OnceLock};
-
 const SERVICE: &str = "safeclaw";
-
-/// Process-local cache of `keyring::Entry` objects, keyed by secret name.
-///
-/// Real OS backends (Secret Service, Keychain, Credential Manager) persist
-/// to shared storage keyed by service/user, so any `Entry` built for the
-/// same name sees the same data regardless of caching. The `keyring` crate's
-/// `mock` test backend is different: each `Entry` instance gets its own
-/// private, unshared credential (`CredentialPersistence::EntryOnly`) — two
-/// separately-constructed `Entry`s for the same service/user do NOT see each
-/// other's data. Caching entries here by name ensures repeated lookups (and
-/// test setup code) reuse the same `Entry` object, which is required for the
-/// mock backend to behave sensibly in tests and is a harmless (slightly
-/// cheaper) optimization under real backends.
-// Entries are wrapped in `Arc` so a lookup can clone the `Arc` (cheap,
-// O(1) refcount bump) out from behind the lock and release the lock
-// *before* running `f`, which may perform a real blocking D-Bus/Keychain/
-// Credential-Manager round trip. Without this, every secret lookup for
-// every name would serialize behind one process-wide lock for the
-// duration of that I/O.
-//
-// The cache never evicts entries. That's fine at the expected scale
-// (~18 named secrets used across the codebase); revisit if that scope
-// grows significantly.
-fn entry_cache() -> &'static Mutex<HashMap<String, Arc<keyring::Entry>>> {
-    static CACHE: OnceLock<Mutex<HashMap<String, Arc<keyring::Entry>>>> = OnceLock::new();
-    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-/// Run `f` against the cached `Entry` for `name`, creating and caching it
-/// first if this is the first lookup for that name. The lock is held only
-/// long enough to look up/insert into the `HashMap`; `f` (and any I/O it
-/// performs) runs after the lock has been released.
-fn with_cached_entry<T>(
-    name: &str,
-    f: impl FnOnce(&keyring::Entry) -> T,
-) -> Result<T, keyring::Error> {
-    let entry = {
-        let mut cache = entry_cache()
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        if !cache.contains_key(name) {
-            let entry = keyring::Entry::new(SERVICE, name)?;
-            cache.insert(name.to_string(), Arc::new(entry));
-        }
-        Arc::clone(cache.get(name).expect("entry just inserted or present"))
-    };
-    Ok(f(&entry))
-}
 
 /// Look up `name` in the OS secrets store (Secret Service on Linux,
 /// Keychain on macOS, Credential Manager on Windows). Returns
@@ -62,8 +11,31 @@ fn with_cached_entry<T>(
 /// case a warning is logged with the underlying error so operators can
 /// diagnose it, but callers see the same "not present" shape they already
 /// handle for env vars today.
+///
+/// Builds a fresh `keyring::Entry` on every call: real OS backends (Secret
+/// Service, Keychain, Credential Manager) persist to shared storage keyed
+/// by service/user, so a fresh `Entry` for the same name always sees the
+/// same data — no caching is needed here. (The `#[cfg(test)]` build below
+/// takes a different path, because the `keyring` crate's `mock` test
+/// backend gives each `Entry` instance its own private, unshared credential
+/// store and can't see values written by a separately-constructed `Entry`
+/// for the same name — see `tests::with_cached_entry`.)
+#[cfg(not(test))]
 pub fn var(name: &str) -> Result<String, std::env::VarError> {
-    match with_cached_entry(name, |entry| entry.get_password()) {
+    let result = keyring::Entry::new(SERVICE, name).and_then(|entry| entry.get_password());
+    match result {
+        Ok(v) => Ok(v),
+        Err(keyring::Error::NoEntry) => Err(std::env::VarError::NotPresent),
+        Err(e) => {
+            tracing::warn!("secrets: keyring error reading {name}: {e}");
+            Err(std::env::VarError::NotPresent)
+        }
+    }
+}
+
+#[cfg(test)]
+pub fn var(name: &str) -> Result<String, std::env::VarError> {
+    match tests::with_cached_entry(name, |entry| entry.get_password()) {
         Ok(Ok(v)) => Ok(v),
         Ok(Err(keyring::Error::NoEntry)) => Err(std::env::VarError::NotPresent),
         Ok(Err(e)) => {
@@ -81,7 +53,8 @@ pub fn var(name: &str) -> Result<String, std::env::VarError> {
 mod tests {
     use super::*;
     use keyring::{mock, set_default_credential_builder};
-    use std::sync::Once;
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex, OnceLock, Once};
 
     // `mock::default_credential_builder()` allocates a fresh in-memory store
     // each time it's called. Tests run in parallel on separate threads, so
@@ -95,6 +68,37 @@ mod tests {
         INIT.call_once(|| {
             set_default_credential_builder(mock::default_credential_builder());
         });
+    }
+
+    // Test-only cache of `keyring::Entry` objects, keyed by secret name.
+    // The `mock` backend gives each `Entry` instance its own private,
+    // unshared credential (`CredentialPersistence::EntryOnly`) — two
+    // separately-constructed `Entry`s for the same service/user do NOT see
+    // each other's data. Caching entries here by name ensures repeated
+    // lookups (test setup and `var()`) reuse the same `Entry` object, which
+    // is required for the mock backend to behave sensibly in tests.
+    fn entry_cache() -> &'static Mutex<HashMap<String, Arc<keyring::Entry>>> {
+        static CACHE: OnceLock<Mutex<HashMap<String, Arc<keyring::Entry>>>> = OnceLock::new();
+        CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+    }
+
+    /// Run `f` against the cached `Entry` for `name`, creating and caching
+    /// it first if this is the first lookup for that name. The lock is
+    /// held only long enough to look up/insert into the `HashMap`; `f` runs
+    /// after the lock has been released.
+    pub(super) fn with_cached_entry<T>(
+        name: &str,
+        f: impl FnOnce(&keyring::Entry) -> T,
+    ) -> Result<T, keyring::Error> {
+        let entry = {
+            let mut cache = entry_cache().lock().unwrap_or_else(|e| e.into_inner());
+            if !cache.contains_key(name) {
+                let entry = keyring::Entry::new(SERVICE, name)?;
+                cache.insert(name.to_string(), Arc::new(entry));
+            }
+            Arc::clone(cache.get(name).expect("entry just inserted or present"))
+        };
+        Ok(f(&entry))
     }
 
     #[test]
