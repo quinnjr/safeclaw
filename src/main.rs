@@ -1115,9 +1115,13 @@ TUNNEL:
     TAILSCALE_TUNNEL_URL  Static URL (skip spawning tailscale)
 
 ENVIRONMENT:
-    DASHBOARD_PASSWORD    Required. Dashboard login password.
-    JWT_SECRET            Required. Secret for signing dashboard JWT cookies.
-    TELEGRAM_BOT_TOKEN    Required if Telegram is enabled.
+    Secrets (DASHBOARD_PASSWORD, JWT_SECRET, TELEGRAM_BOT_TOKEN, etc.) are
+    read from the OS secrets store, not env vars. Set them with:
+      Linux:  secret-tool store --label=\"safeclaw: NAME\" service safeclaw username NAME
+      macOS:  security add-generic-password -s safeclaw -a NAME -w
+    DASHBOARD_PASSWORD and JWT_SECRET are required; TELEGRAM_BOT_TOKEN is
+    required if Telegram is enabled.
+
     RUST_LOG              Optional. Tracing filter (default: info).
 "
     );

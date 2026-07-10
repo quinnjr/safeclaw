@@ -1,6 +1,13 @@
 # Docker is optional — safeclaw self-sandboxes via Landlock, seccomp-bpf,
 # and capability dropping on Linux. This compose file is provided for
 # convenience; the binary runs with equivalent isolation natively.
+#
+# Secrets (bot tokens, API keys, DASHBOARD_PASSWORD, JWT_SECRET, etc.) are
+# read from the OS secrets store (see src/secrets.rs), not from .env. The
+# container runs as an unprivileged user with no desktop session, so the
+# host's Secret Service is passed in via a D-Bus socket bind mount. Set
+# SAFECLAW_UID to the uid whose keyring holds the secrets (defaults to
+# 1000, matching the Dockerfile's SAFE_UID build arg).
 services:
   safeclaw:
     build:
@@ -14,8 +21,10 @@ services:
       - ${HOME}/.local/share/safeclaw:/data/safeclaw
       - ./config.toml:/config/safeclaw/config.toml:ro
       - ${CLAUDE_CONFIG_DIR:-${HOME}/.claude}:/claude-config
+      - /run/user/${SAFECLAW_UID:-1000}/bus:/run/user/${SAFECLAW_UID:-1000}/bus
     env_file:
       - .env
     environment:
       - CLAUDE_CONFIG_DIR=/claude-config
       - HOME=/home/safeclaw
+      - DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${SAFECLAW_UID:-1000}/bus
