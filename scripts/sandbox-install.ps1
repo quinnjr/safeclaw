@@ -38,8 +38,8 @@
     .\sandbox-install.ps1 Teardown
 
 .NOTES
-    Copyright (c) 2026 Pegasus Heavy Industries LLC
-    Contact: pegasusheavyindustries@gmail.com
+    Copyright (c) 2026 Joseph R. Quinn
+    Contact: quinn.josephr@protonmail.com
 #>
 
 [CmdletBinding()]

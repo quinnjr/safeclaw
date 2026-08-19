@@ -41,7 +41,7 @@
 				>
 			{/each}
 			<a
-				href="https://github.com/pegasusheavy/safeclaw"
+				href="https://github.com/quinnjr/safeclaw"
 				target="_blank"
 				rel="noopener"
 				class="flex items-center gap-2 rounded-lg bg-surface-raised px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-surface-overlay"
@@ -70,7 +70,7 @@
 				>
 			{/each}
 			<a
-				href="https://github.com/pegasusheavy/safeclaw"
+				href="https://github.com/quinnjr/safeclaw"
 				target="_blank"
 				rel="noopener"
 				class="mt-2 flex items-center gap-2 text-sm text-slate-400 transition-colors hover:text-accent-light"

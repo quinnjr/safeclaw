@@ -4,7 +4,7 @@
 			icon: 'fa-brands fa-github',
 			title: 'Star on GitHub',
 			desc: 'Browse the source, file issues, and send PRs.',
-			href: 'https://github.com/pegasusheavy/safeclaw',
+			href: 'https://github.com/quinnjr/safeclaw',
 			cta: 'View repository',
 			color: 'hover:border-slate-600'
 		},
@@ -12,17 +12,9 @@
 			icon: 'fa-solid fa-book-open',
 			title: 'Read CONTRIBUTING.md',
 			desc: 'Git workflow, commit standards, code style, and AI co-authorship policy.',
-			href: 'https://github.com/pegasusheavy/safeclaw/blob/main/CONTRIBUTING.md',
+			href: 'https://github.com/quinnjr/safeclaw/blob/main/CONTRIBUTING.md',
 			cta: 'Contributing guide',
 			color: 'hover:border-accent/40'
-		},
-		{
-			icon: 'fa-brands fa-patreon',
-			title: 'Support on Patreon',
-			desc: 'Help fund development and get early access to new features.',
-			href: 'https://www.patreon.com/c/PegasusHeavyIndustries?vanity=user',
-			cta: 'Become a patron',
-			color: 'hover:border-orange-500/40'
 		}
 	];
 </script>

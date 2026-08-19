@@ -26,7 +26,7 @@ SafeClaw pairs a pluggable LLM backend (Claude Code CLI, OpenAI Codex CLI, Googl
 Pre-built multi-arch images (amd64 + arm64) are published on every release:
 
 ```bash
-docker pull ghcr.io/pegasusheavy/SafeClaw:latest
+docker pull ghcr.io/quinnjr/SafeClaw:latest
 ```
 
 ### Docker — full setup
@@ -41,7 +41,7 @@ mkdir -p ~/.local/share/SafeClaw
 
 # Config file — start from the example and customize.
 mkdir -p ~/.config/SafeClaw
-curl -fsSL https://raw.githubusercontent.com/pegasusheavy/SafeClaw/main/config.example.toml \
+curl -fsSL https://raw.githubusercontent.com/quinnjr/SafeClaw/main/config.example.toml \
   -o ~/.config/SafeClaw/config.toml
 ```
 
@@ -50,7 +50,7 @@ curl -fsSL https://raw.githubusercontent.com/pegasusheavy/SafeClaw/main/config.e
 Download the example and fill in your values:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/pegasusheavy/SafeClaw/main/.env.example \
+curl -fsSL https://raw.githubusercontent.com/quinnjr/SafeClaw/main/.env.example \
   -o ~/.config/SafeClaw/.env
 ```
 
@@ -84,7 +84,7 @@ docker run -d \
   --env-file ~/.config/SafeClaw/.env \
   -e NO_JAIL=1 \
   --entrypoint SafeClaw \
-  ghcr.io/pegasusheavy/SafeClaw:latest
+  ghcr.io/quinnjr/SafeClaw:latest
 ```
 
 The dashboard is now at **http://localhost:3031**.
@@ -104,7 +104,7 @@ If you prefer Compose, create a `docker-compose.yml`:
 ```yaml
 services:
   SafeClaw:
-    image: ghcr.io/pegasusheavy/SafeClaw:latest
+    image: ghcr.io/quinnjr/SafeClaw:latest
     container_name: SafeClaw
     restart: unless-stopped
     ports:
@@ -149,12 +149,12 @@ These are not required but enable additional features:
 To build the image yourself instead of pulling from GHCR:
 
 ```bash
-git clone https://github.com/pegasusheavy/SafeClaw.git
+git clone https://github.com/quinnjr/SafeClaw.git
 cd SafeClaw
 docker build -t SafeClaw:latest .
 ```
 
-Then substitute `SafeClaw:latest` for `ghcr.io/pegasusheavy/SafeClaw:latest` in the commands above.
+Then substitute `SafeClaw:latest` for `ghcr.io/quinnjr/SafeClaw:latest` in the commands above.
 
 #### Matching host UID/GID
 
@@ -177,7 +177,7 @@ The GHCR image is multi-arch (`linux/amd64` + `linux/arm64`). Docker will pull t
 Requires Rust (stable, 2024 edition), Node.js, and pnpm.
 
 ```bash
-git clone https://github.com/pegasusheavy/SafeClaw.git
+git clone https://github.com/quinnjr/SafeClaw.git
 cd SafeClaw
 
 # Frontend
@@ -323,6 +323,6 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the git workflow, commit message st
 
 ## License
 
-Copyright (c) 2026 Pegasus Heavy Industries LLC
+Copyright (c) 2026 Joseph R. Quinn
 
-Contact: [pegasusheavyindustries@gmail.com](mailto:pegasusheavyindustries@gmail.com)
+Contact: [quinn.josephr@protonmail.com](mailto:quinn.josephr@protonmail.com)

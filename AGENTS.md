@@ -650,5 +650,5 @@ Authentication is **mandatory** — the server refuses to start without `DASHBOA
 
 ## License
 
-Copyright (c) 2026 Pegasus Heavy Industries LLC
-Contact: pegasusheavyindustries@gmail.com
+Copyright (c) 2026 Joseph R. Quinn
+Contact: quinn.josephr@protonmail.com

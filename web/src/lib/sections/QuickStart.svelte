@@ -8,9 +8,9 @@
 			desc: 'One folder for data, one for config. That\'s it.',
 			code: `mkdir -p ~/.local/share/safeclaw
 mkdir -p ~/.config/safeclaw
-curl -fsSL https://raw.githubusercontent.com/pegasusheavy/safeclaw/main/config.example.toml \\
+curl -fsSL https://raw.githubusercontent.com/quinnjr/safeclaw/main/config.example.toml \\
   -o ~/.config/safeclaw/config.toml
-curl -fsSL https://raw.githubusercontent.com/pegasusheavy/safeclaw/main/.env.example \\
+curl -fsSL https://raw.githubusercontent.com/quinnjr/safeclaw/main/.env.example \\
   -o ~/.config/safeclaw/.env`
 		},
 		{
@@ -34,7 +34,7 @@ JWT_SECRET=$(openssl rand -hex 32)`
   --env-file ~/.config/safeclaw/.env \\
   -e NO_JAIL=1 \\
   --entrypoint safeclaw \\
-  ghcr.io/pegasusheavy/safeclaw:latest`
+  ghcr.io/quinnjr/safeclaw:latest`
 		}
 	];
 </script>
@@ -76,7 +76,7 @@ JWT_SECRET=$(openssl rand -hex 32)`
 					<i class="fa-solid fa-circle-info mr-2 text-accent"></i>
 					Want Docker Compose instead? Check the
 					<a
-						href="https://github.com/pegasusheavy/safeclaw#docker-compose"
+						href="https://github.com/quinnjr/safeclaw#docker-compose"
 						target="_blank"
 						rel="noopener"
 						class="font-medium text-accent-light underline decoration-accent/30 underline-offset-2 hover:decoration-accent"
@@ -90,7 +90,7 @@ JWT_SECRET=$(openssl rand -hex 32)`
 				Prefer building from source? You can, but you'll need Rust (stable), Node.js, and pnpm.
 				See the
 				<a
-					href="https://github.com/pegasusheavy/safeclaw#from-source-no-docker"
+					href="https://github.com/quinnjr/safeclaw#from-source-no-docker"
 					target="_blank"
 					rel="noopener"
 					class="text-slate-500 underline decoration-slate-700 underline-offset-2 hover:text-slate-400"

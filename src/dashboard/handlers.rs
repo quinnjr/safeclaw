@@ -1796,7 +1796,7 @@ pub async fn check_update(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let resp = client
-        .get("https://api.github.com/repos/PegasusHeavyIndustries/safeclaw/releases/latest")
+        .get("https://api.github.com/repos/quinnjr/safeclaw/releases/latest")
         .send()
         .await
         .map_err(|e| {

@@ -8,7 +8,7 @@
         "build:ui": "vite build src/dashboard/frontend",
         "dev:ui": "vite dev src/dashboard/frontend"
     },
-    "author": "Pegasus Heavy Industries LLC <pegasusheavyindustries@gmail.com>",
+    "author": "Joseph R. Quinn <quinn.josephr@protonmail.com>",
     "license": "UNLICENSED",
     "packageManager": "pnpm@10.29.2",
     "pnpm": {

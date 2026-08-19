@@ -1,7 +1,7 @@
 <script lang="ts">
 	import CodeBlock from '$lib/components/CodeBlock.svelte';
 
-	const pullCommand = 'docker pull ghcr.io/pegasusheavy/safeclaw:latest';
+	const pullCommand = 'docker pull ghcr.io/quinnjr/safeclaw:latest';
 </script>
 
 <section class="relative overflow-hidden pt-32 pb-20 md:pt-44 md:pb-32">
@@ -45,7 +45,7 @@
 				Get Started
 			</a>
 			<a
-				href="https://github.com/pegasusheavy/safeclaw"
+				href="https://github.com/quinnjr/safeclaw"
 				target="_blank"
 				rel="noopener"
 				class="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-surface-raised px-6 py-3 font-semibold text-slate-300 transition-all hover:border-slate-600 hover:bg-surface-overlay"
