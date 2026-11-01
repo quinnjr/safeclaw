@@ -620,7 +620,7 @@ execution, knowledge graph, multi-interface control, and a full web dashboard.
   and Svelte (`pnpm test`, `pnpm build`) on every push/PR to `main`.
 - **CodeQL workflow** — static security analysis for JavaScript/TypeScript.
 - **Docker workflow** — multi-arch image build and push to
-  `ghcr.io/pegasusheavy/SafeClaw` on push to `main` and version tags.
+  `ghcr.io/quinnjr/SafeClaw` on push to `main` and version tags.
 
 ### Configuration
 
@@ -629,4 +629,4 @@ execution, knowledge graph, multi-interface control, and a full web dashboard.
 - **Example config** — `config.example.toml` documents every option with
   inline comments, including `[federation]` for multi-node setup.
 
-[0.1.0]: https://github.com/PegasusHeavyIndustries/SafeClaw/releases/tag/v0.1.0
+[0.1.0]: https://github.com/quinnjr/SafeClaw/releases/tag/v0.1.0

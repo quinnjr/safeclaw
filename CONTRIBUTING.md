@@ -13,7 +13,7 @@ Thank you for your interest in contributing to SafeClaw. This document covers ev
 
 ```bash
 # Clone the repository
-git clone https://github.com/pegasusheavy/SafeClaw.git
+git clone https://github.com/quinnjr/SafeClaw.git
 cd SafeClaw
 
 # Switch to the develop branch (all work starts here)
@@ -243,8 +243,8 @@ Contributions that omit required AI attribution may be rejected or asked to amen
 
 ## Security
 
-If you discover a security vulnerability, **do not** open a public issue. Email [pegasusheavyindustries@gmail.com](mailto:pegasusheavyindustries@gmail.com) directly.
+If you discover a security vulnerability, **do not** open a public issue. Email [quinn.josephr@protonmail.com](mailto:quinn.josephr@protonmail.com) directly.
 
 ## License
 
-Copyright (c) 2026 Pegasus Heavy Industries LLC. By contributing, you agree that your contributions will be licensed under the same terms as the project.
+Copyright (c) 2026 Joseph R. Quinn. By contributing, you agree that your contributions will be licensed under the same terms as the project.

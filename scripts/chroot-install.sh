@@ -16,8 +16,8 @@
 #   SA_USER        Runtime user                (default: safeclaw)
 #   SA_GROUP       Runtime group               (default: safeclaw)
 #
-# Copyright (c) 2026 Pegasus Heavy Industries LLC
-# Contact: pegasusheavyindustries@gmail.com
+# Copyright (c) 2026 Joseph R. Quinn
+# Contact: quinn.josephr@protonmail.com
 
 set -euo pipefail
 
@@ -425,7 +425,7 @@ install_systemd_unit() {
     cat > "$unit_path" <<UNIT
 [Unit]
 Description=safeclaw AI assistant (chroot)
-Documentation=https://github.com/PegasusHeavyIndustries/safeclaw
+Documentation=https://github.com/quinnjr/safeclaw
 After=network-online.target
 Wants=network-online.target
 

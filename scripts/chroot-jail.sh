@@ -11,8 +11,8 @@
 #
 # Bypass:  NO_JAIL=1  or  --no-jail  flag to skip the jail for debugging.
 #
-# Copyright (c) 2026 Pegasus Heavy Industries LLC
-# Contact: pegasusheavyindustries@gmail.com
+# Copyright (c) 2026 Joseph R. Quinn
+# Contact: quinn.josephr@protonmail.com
 
 set -euo pipefail
 

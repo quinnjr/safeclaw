@@ -10,7 +10,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: pegasusheavy/safeclaw
+  IMAGE_NAME: quinnjr/safeclaw
 
 jobs:
   build:
@@ -37,7 +37,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/pegasusheavy/safeclaw
+          images: ghcr.io/quinnjr/safeclaw
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
